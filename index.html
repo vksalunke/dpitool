@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DPI Converter Tool</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    input[type="file"], input[type="number"] {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px;
+    }
+    canvas {
+      display: block;
+      margin: 10px auto;
+      border: 1px solid #ccc;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: black;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>DPI Converter Tool</h2>
+    <input type="file" id="imageInput" accept="image/*" />
+    <label>Horizontal DPI:</label>
+    <input type="number" id="hDPI" value="300" />
+    <label>Vertical DPI:</label>
+    <input type="number" id="vDPI" value="300" />
+    <canvas id="canvas" width="132" height="170"></canvas>
+    <button onclick="downloadImage()">Download PNG with DPI</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let image = new Image();
+
+    document.getElementById("imageInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        image.onload = () => {
+          // Resize to 132 x 170
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(image, 0, 0, 132, 170);
+        };
+        image.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function downloadImage() {
+      const hDPI = parseInt(document.getElementById("hDPI").value);
+      const vDPI = parseInt(document.getElementById("vDPI").value);
+
+      canvas.toBlob((blob) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const arrayBuffer = reader.result;
+          const pngWithDPI = setDPI(new Uint8Array(arrayBuffer), hDPI, vDPI);
+          const blobWithDPI = new Blob([pngWithDPI], { type: "image/png" });
+
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blobWithDPI);
+          a.download = "converted.png";
+          a.click();
+        };
+        reader.readAsArrayBuffer(blob);
+      }, "image/png");
+    }
+
+    // Inject DPI chunks into PNG binary
+    function setDPI(pngData, dpiX, dpiY) {
+      const dpiChunk = createpHYsChunk(dpiX, dpiY);
+      const result = [];
+
+      // PNG signature
+      result.push(...pngData.slice(0, 8));
+
+      let i = 8;
+      while (i < pngData.length) {
+        const length = (
+          (pngData[i] << 24) |
+          (pngData[i + 1] << 16) |
+          (pngData[i + 2] << 8) |
+          pngData[i + 3]
+        );
+        const type = String.fromCharCode(
+          pngData[i + 4], pngData[i + 5], pngData[i + 6], pngData[i + 7]
+        );
+        const chunk = pngData.slice(i, i + 12 + length);
+
+        result.push(...chunk);
+        i += 12 + length;
+
+        if (type === "IHDR") {
+          result.push(...dpiChunk); // Inject pHYs right after IHDR
+        }
+      }
+
+      return new Uint8Array(result);
+    }
+
+    function createpHYsChunk(dpiX, dpiY) {
+      const pxPerMeterX = Math.round(dpiX * 39.3701);
+      const pxPerMeterY = Math.round(dpiY * 39.3701);
+      const data = new Uint8Array(9);
+      data[0] = (pxPerMeterX >> 24) & 0xff;
+      data[1] = (pxPerMeterX >> 16) & 0xff;
+      data[2] = (pxPerMeterX >> 8) & 0xff;
+      data[3] = pxPerMeterX & 0xff;
+      data[4] = (pxPerMeterY >> 24) & 0xff;
+      data[5] = (pxPerMeterY >> 16) & 0xff;
+      data[6] = (pxPerMeterY >> 8) & 0xff;
+      data[7] = pxPerMeterY & 0xff;
+      data[8] = 1; // unit: meters
+
+      const crcTable = [];
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) {
+          c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        }
+        crcTable[i] = c;
+      }
+
+      const type = [112, 72, 89, 115]; // "pHYs"
+      const chunk = new Uint8Array(4 + 4 + 9 + 4);
+      const dataLength = 9;
+
+      chunk[0] = (dataLength >> 24) & 0xff;
+      chunk[1] = (dataLength >> 16) & 0xff;
+      chunk[2] = (dataLength >> 8) & 0xff;
+      chunk[3] = dataLength & 0xff;
+
+      chunk.set(type, 4);
+      chunk.set(data, 8);
+
+      let crc = 0xffffffff;
+      for (let i = 4; i < 17; i++) {
+        crc = crcTable[(crc ^ chunk[i]) & 0xff] ^ (crc >>> 8);
+      }
+
+      crc ^= 0xffffffff;
+      chunk[17] = (crc >> 24) & 0xff;
+      chunk[18] = (crc >> 16) & 0xff;
+      chunk[19] = (crc >> 8) & 0xff;
+      chunk[20] = crc & 0xff;
+
+      return chunk;
+    }
+  </script>
+</body>
+</html>
