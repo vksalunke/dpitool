@@ -2,123 +2,538 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Batch DPI Converter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCC Photo Resizer</title>
   <style>
     body {
-      font-family: Arial;
+      font-family: Arial, sans-serif;
+      margin: 0;
       padding: 20px;
-      background: #f9f9f9;
+      background-color: #f4f4f4;
     }
-    h2 { margin-bottom: 10px; }
-    input[type="file"] { margin-bottom: 10px; }
-    .preview { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 20px; }
-    .preview img { border: 1px solid #ccc; padding: 4px; background: white; }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 25px;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 25px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .student-name {
+      margin-bottom: 25px;
+    }
+    .student-name label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    .student-name input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .upload-section {
+      margin-bottom: 25px;
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    /* Sample image boxes */
+    .photo-sample-box, .signature-sample-box {
+      flex-shrink: 0;
+      border: 2px dashed #999;
+      border-radius: 4px;
+      padding: 5px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #f9f9f9;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+    .photo-sample-box {
+      width: 99px;  /* 132 * 0.75 */
+      height: 127.5px;  /* 170 * 0.75 */
+    }
+    .signature-sample-box {
+      width: 127.5px;  /* 170 * 0.75 */
+      height: 99px;  /* 132 * 0.75 */
+    }
+    .sample-image {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      cursor: pointer;
+    }
+    .upload-content {
+      flex-grow: 1;
+    }
+    .upload-section label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: bold;
+      font-size: 15px;
+    }
+    .dimensions {
+      display: block;
+      margin-bottom: 10px;
+      color: #666;
+      font-size: 14px;
+    }
+    .requirements {
+      display: block;
+      margin-bottom: 10px;
+      color: #666;
+      font-size: 12px;
+      font-style: italic;
+    }
+    .upload-section input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 25px;
+    }
+    .resize-button, .reset-button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .resize-button {
+      background-color: #28a745;
+      color: #fff;
+    }
+    .resize-button:hover {
+      background-color: #218838;
+    }
+    .reset-button {
+      background-color: #dc3545;
+      color: #fff;
+    }
+    .reset-button:hover {
+      background-color: #c82333;
+    }
+    /* Confirmation dialog styles */
+    .confirmation-dialog {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .confirmation-box {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 400px;
+      width: 90%;
+    }
+    .confirmation-buttons {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 20px;
+      gap: 10px;
+    }
+    .confirmation-buttons button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .confirm-button {
+      background-color: #28a745;
+      color: white;
+    }
+    .cancel-button {
+      background-color: #dc3545;
+      color: white;
+    }
+    /* Progress bar */
+    .progress-container {
+      width: 100%;
+      background-color: #f1f1f1;
+      border-radius: 4px;
+      margin-top: 20px;
+      display: none;
+    }
+    .progress-bar {
+      width: 0%;
+      height: 20px;
+      background-color: #4CAF50;
+      border-radius: 4px;
+      text-align: center;
+      line-height: 20px;
+      color: white;
+    }
   </style>
 </head>
 <body>
+  <h1>CCC Photo Resizer</h1>
+  <div class="container">
+    <div class="student-name">
+      <label for="studentName">Student Name (optional):</label>
+      <input type="text" id="studentName" placeholder="Enter your name">
+    </div>
+    
+    <!-- Photo Section -->
+    <div class="upload-section">
+      <div class="photo-sample-box">
+        <img id="photo-preview" src="http://govtphotoresizer.com/wp-content/uploads/2025/04/Photo-Sample01.jpg" alt="Photo Preview" class="sample-image" onclick="window.open(this.src)">
+      </div>
+      <div class="upload-content">
+        <label for="photo">Upload Photo</label>
+        <span class="dimensions">Will be resized to 132×170 pixels</span>
+        <span class="requirements">(File size: 5KB-50KB, DPI: 96-300)</span>
+        <input type="file" id="photo" accept="image/jpeg, image/jpg, image/png" onchange="previewImage(this, 'photo-preview')">
+      </div>
+    </div>
+    
+    <!-- Signature Section -->
+    <div class="upload-section">
+      <div class="signature-sample-box">
+        <img id="signature-preview" src="http://govtphotoresizer.com/wp-content/uploads/2025/04/Signature-Sample01.jpg" alt="Signature Preview" class="sample-image" onclick="window.open(this.src)">
+      </div>
+      <div class="upload-content">
+        <label for="signature">Upload Signature</label>
+        <span class="dimensions">Will be resized to 170×132 pixels</span>
+        <span class="requirements">(File size: 5KB-20KB, DPI: 96-300)</span>
+        <input type="file" id="signature" accept="image/jpeg, image/jpg, image/png" onchange="previewImage(this, 'signature-preview')">
+      </div>
+    </div>
+    
+    <!-- Thumb Impression Section -->
+    <div class="upload-section">
+      <div class="signature-sample-box">
+        <img id="thumb-preview" src="http://govtphotoresizer.com/wp-content/uploads/2025/04/Thumb-Sample01.jpg" alt="Thumb Preview" class="sample-image" onclick="window.open(this.src)">
+      </div>
+      <div class="upload-content">
+        <label for="thumb">Upload Left Thumb Impression</label>
+        <span class="dimensions">Will be resized to 170×132 pixels</span>
+        <span class="requirements">(File size: 5KB-20KB, DPI: 96-300)</span>
+        <input type="file" id="thumb" accept="image/jpeg, image/jpg, image/png" onchange="previewImage(this, 'thumb-preview')">
+      </div>
+    </div>
+    
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar">0%</div>
+    </div>
+    
+    <div class="button-group">
+      <button class="resize-button" onclick="resizeAndDownload()">Resize and Download</button>
+      <button class="reset-button" onclick="resetForm()">Reset All</button>
+    </div>
+  </div>
 
-  <h2>Batch DPI Converter (132x170 px, 300 DPI)</h2>
-  <input type="file" multiple accept="image/*" id="fileInput">
-  <br>
-  <button onclick="downloadAll()">Download All as ZIP</button>
-  <div class="preview" id="preview"></div>
+  <!-- Confirmation Dialog -->
+  <div id="confirmationDialog" class="confirmation-dialog" style="display: none;">
+    <div class="confirmation-box">
+      <div id="confirmationMessage"></div>
+      <div class="confirmation-buttons">
+        <button class="cancel-button" onclick="cancelResize()">Cancel</button>
+        <button class="confirm-button" onclick="proceedWithResize()">Proceed</button>
+      </div>
+    </div>
+  </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.0/dist/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const previewDiv = document.getElementById('preview');
-    const zip = new JSZip();
+    // Sample image URLs
+    const sampleImages = {
+      photo: "http://govtphotoresizer.com/wp-content/uploads/2025/04/Photo-Sample01.jpg",
+      signature: "http://govtphotoresizer.com/wp-content/uploads/2025/04/Signature-Sample01.jpg",
+      thumb: "http://govtphotoresizer.com/wp-content/uploads/2025/04/Thumb-Sample01.jpg"
+    };
 
-    fileInput.addEventListener('change', async (e) => {
-      previewDiv.innerHTML = "";
-      zip.files = {}; // reset ZIP
+    // Variables for confirmation dialog
+    let missingFields = [];
+    let filesToProcess = {};
 
-      for (const file of e.target.files) {
-        const img = await createImageBitmap(file);
-        const canvas = document.createElement('canvas');
-        canvas.width = 132;
-        canvas.height = 170;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 132, 170);
-
-        const pngBlob = await canvasToDPIBlob(canvas, 300, 300);
-        const dataURL = URL.createObjectURL(pngBlob);
-
-        // Show preview
-        const imgElem = document.createElement('img');
-        imgElem.src = dataURL;
-        imgElem.width = 132;
-        imgElem.height = 170;
-        previewDiv.appendChild(imgElem);
-
-        // Add to ZIP
-        const arrayBuffer = await pngBlob.arrayBuffer();
-        zip.file(file.name.replace(/\.[^/.]+$/, "") + "_converted.png", arrayBuffer);
-      }
-    });
-
-    async function canvasToDPIBlob(canvas, dpiX = 300, dpiY = 300) {
-      const png = atob(canvas.toDataURL("image/png").split(",")[1]);
-      const array = new Uint8Array(png.length);
-      for (let i = 0; i < png.length; i++) array[i] = png.charCodeAt(i);
-
-      // DPI metadata: 1 meter = 39.3701 inches, so 300 dpi = 11811 pixels/meter
-      const pHYsChunk = new Uint8Array([
-        ...[0x70, 0x48, 0x59, 0x73], // "pHYs"
-        ...toBytes(11811), // X axis
-        ...toBytes(11811), // Y axis
-        1 // unit is meter
-      ]);
-      const length = toBytes(pHYsChunk.length - 4);
-      const crc = crc32(pHYsChunk);
-
-      const newChunk = new Uint8Array(4 + 4 + 9 + 4);
-      newChunk.set(length, 0);
-      newChunk.set(pHYsChunk, 4);
-      newChunk.set(crc, 4 + 4 + 9);
-
-      const iendIndex = array.findIndex((_, i) =>
-        array[i] === 0x49 && array[i+1] === 0x45 &&
-        array[i+2] === 0x4E && array[i+3] === 0x44
-      ) - 4;
-
-      const before = array.slice(0, iendIndex);
-      const after = array.slice(iendIndex);
-      const full = new Uint8Array(before.length + newChunk.length + after.length);
-      full.set(before, 0);
-      full.set(newChunk, before.length);
-      full.set(after, before.length + newChunk.length);
-
-      return new Blob([full], { type: "image/png" });
-    }
-
-    function toBytes(num) {
-      return [
-        (num >> 24) & 0xff,
-        (num >> 16) & 0xff,
-        (num >> 8) & 0xff,
-        num & 0xff
-      ];
-    }
-
-    function crc32(bytes) {
-      let crc = 0xffffffff;
-      for (let i = 0; i < bytes.length; i++) {
-        crc ^= bytes[i];
-        for (let j = 0; j < 8; j++) {
-          crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    // Preview uploaded image in the sample box
+    function previewImage(input, previewId) {
+      const preview = document.getElementById(previewId);
+      const file = input.files[0];
+      
+      if (file) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+          preview.src = e.target.result;
         }
+        
+        reader.readAsDataURL(file);
       }
-      return toBytes((crc ^ 0xffffffff) >>> 0);
     }
 
-    function downloadAll() {
-      zip.generateAsync({ type: "blob" }).then(content => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(content);
-        a.download = "converted_images.zip";
-        a.click();
+    // Reset form to initial state
+    function resetForm() {
+      // Reset student name
+      document.getElementById('studentName').value = '';
+      
+      // Reset file inputs
+      document.getElementById('photo').value = '';
+      document.getElementById('signature').value = '';
+      document.getElementById('thumb').value = '';
+      
+      // Reset preview images to sample images
+      document.getElementById('photo-preview').src = sampleImages.photo;
+      document.getElementById('signature-preview').src = sampleImages.signature;
+      document.getElementById('thumb-preview').src = sampleImages.thumb;
+      
+      // Hide progress bar
+      document.getElementById('progressContainer').style.display = 'none';
+    }
+
+    // Show confirmation dialog for missing fields
+    function showConfirmationDialog() {
+      const dialog = document.getElementById('confirmationDialog');
+      const message = document.getElementById('confirmationMessage');
+      
+      let messageText = "The following files are missing:<br><br>";
+      messageText += missingFields.map(field => `• ${field}`).join("<br>");
+      messageText += "<br><br>Do you want to proceed with available files?";
+      
+      message.innerHTML = messageText;
+      dialog.style.display = "flex";
+    }
+
+    // Cancel resize operation
+    function cancelResize() {
+      document.getElementById('confirmationDialog').style.display = "none";
+    }
+
+    // Proceed with resize despite missing files
+    function proceedWithResize() {
+      document.getElementById('confirmationDialog').style.display = "none";
+      
+      const studentName = document.getElementById('studentName').value.trim();
+      const photoFile = document.getElementById('photo').files[0];
+      const signatureFile = document.getElementById('signature').files[0];
+      const thumbFile = document.getElementById('thumb').files[0];
+
+      // Only process files that exist
+      filesToProcess = {
+        photo: missingFields.includes("Photo") ? null : photoFile,
+        signature: missingFields.includes("Signature") ? null : signatureFile,
+        thumb: missingFields.includes("Thumb Impression") ? null : thumbFile
+      };
+
+      processFiles(studentName, filesToProcess.photo, filesToProcess.signature, filesToProcess.thumb);
+    }
+
+    async function resizeAndDownload() {
+      const studentName = document.getElementById('studentName').value.trim();
+      const photoFile = document.getElementById('photo').files[0];
+      const signatureFile = document.getElementById('signature').files[0];
+      const thumbFile = document.getElementById('thumb').files[0];
+
+      missingFields = [];
+      filesToProcess = {};
+
+      if (!photoFile) missingFields.push("Photo");
+      if (!signatureFile) missingFields.push("Signature");
+      if (!thumbFile) missingFields.push("Thumb Impression");
+
+      if (missingFields.length > 0) {
+        showConfirmationDialog();
+        return;
+      }
+
+      processFiles(studentName, photoFile, signatureFile, thumbFile);
+    }
+
+    function updateProgress(progress) {
+      const progressContainer = document.getElementById('progressContainer');
+      const progressBar = document.getElementById('progressBar');
+      
+      progressContainer.style.display = 'block';
+      progressBar.style.width = progress + '%';
+      progressBar.textContent = progress + '%';
+    }
+
+    async function processFiles(studentName, photoFile, signatureFile, thumbFile) {
+      try {
+        updateProgress(0);
+        const zip = new JSZip();
+        let hasFiles = false;
+        let filesProcessed = 0;
+        const totalFiles = (photoFile ? 1 : 0) + (signatureFile ? 1 : 0) + (thumbFile ? 1 : 0);
+
+        if (photoFile) {
+          const photo = await resizeImage(photoFile, 132, 170, 'photo', 5, 50);
+          const photoName = studentName ? `${studentName}_Photo.jpg` : "Photo.jpg";
+          zip.file(photoName, photo);
+          hasFiles = true;
+          filesProcessed++;
+          updateProgress(Math.round((filesProcessed / totalFiles) * 100));
+        }
+
+        if (signatureFile) {
+          const signature = await resizeImage(signatureFile, 170, 132, 'signature', 5, 20);
+          const signatureName = studentName ? `${studentName}_Signature.jpg` : "Signature.jpg";
+          zip.file(signatureName, signature);
+          hasFiles = true;
+          filesProcessed++;
+          updateProgress(Math.round((filesProcessed / totalFiles) * 100));
+        }
+
+        if (thumbFile) {
+          const thumb = await resizeImage(thumbFile, 170, 132, 'thumb', 5, 20);
+          const thumbName = studentName ? `${studentName}_Thumb.jpg` : "Thumb.jpg";
+          zip.file(thumbName, thumb);
+          hasFiles = true;
+          filesProcessed++;
+          updateProgress(Math.round((filesProcessed / totalFiles) * 100));
+        }
+
+        if (hasFiles) {
+          const zipFileName = studentName ? `${studentName}_CCC_Images.zip` : "CCC_Images.zip";
+          updateProgress(100);
+          setTimeout(() => {
+            zip.generateAsync({ type: "blob" }).then((content) => {
+              saveAs(content, zipFileName);
+              updateProgress(0);
+              document.getElementById('progressContainer').style.display = 'none';
+            });
+          }, 500);
+        } else {
+          alert("No files were selected for processing.");
+          document.getElementById('progressContainer').style.display = 'none';
+        }
+      } catch (error) {
+        alert("An error occurred while processing the images: " + error.message);
+        document.getElementById('progressContainer').style.display = 'none';
+      }
+    }
+
+    function resizeImage(file, targetWidth, targetHeight, type, minSizeKB, maxSizeKB) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+          img.src = e.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            // Set DPI to 300 (default is 96)
+            canvas.style.imageRendering = '-webkit-optimize-contrast';
+            canvas.style.imageRendering = 'crisp-edges';
+            canvas.style.imageRendering = 'pixelated';
+            
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+            // Optimize quality to meet file size requirements
+            optimizeImageQuality(canvas, minSizeKB, maxSizeKB, resolve, reject);
+          };
+          img.onerror = () => reject(new Error("Failed to load image"));
+        };
+        reader.onerror = () => reject(new Error("Failed to read file"));
+
+        reader.readAsDataURL(file);
       });
+    }
+
+    function optimizeImageQuality(canvas, minSizeKB, maxSizeKB, resolve, reject) {
+      let quality = 0.9; // Start with high quality
+      let blob = null;
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      function attemptCompression() {
+        canvas.toBlob((resultBlob) => {
+          attempts++;
+          blob = resultBlob;
+          
+          if (!blob) {
+            reject(new Error("Failed to create image blob"));
+            return;
+          }
+          
+          const sizeKB = blob.size / 1024;
+          
+          if (sizeKB >= minSizeKB && sizeKB <= maxSizeKB) {
+            // Perfect size
+            resolve(blob);
+          } else if (sizeKB < minSizeKB && attempts < maxAttempts) {
+            // Too small - increase quality slightly
+            quality = Math.min(0.95, quality + 0.05);
+            attemptCompression();
+          } else if (sizeKB > maxSizeKB && attempts < maxAttempts) {
+            // Too big - decrease quality
+            quality = Math.max(0.3, quality - 0.1);
+            attemptCompression();
+          } else {
+            // Max attempts reached or other issue
+            if (sizeKB < minSizeKB) {
+              // If still too small after adjustments, just use it
+              resolve(blob);
+            } else if (sizeKB > maxSizeKB) {
+              // If still too big, force it under maxSizeKB by reducing dimensions slightly
+              forceSizeReduction(canvas, minSizeKB, maxSizeKB, resolve, reject);
+            } else {
+              resolve(blob);
+            }
+          }
+        }, 'image/jpeg', quality);
+      }
+      
+      attemptCompression();
+    }
+
+    function forceSizeReduction(canvas, minSizeKB, maxSizeKB, resolve, reject) {
+      // Create a temporary canvas with slightly reduced dimensions
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      
+      // Reduce dimensions by 5% (this will help reduce file size)
+      const newWidth = Math.floor(canvas.width * 0.95);
+      const newHeight = Math.floor(canvas.height * 0.95);
+      
+      tempCanvas.width = newWidth;
+      tempCanvas.height = newHeight;
+      tempCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+      
+      // Try again with lower quality
+      tempCanvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Failed to create image blob after size reduction"));
+          return;
+        }
+        
+        const sizeKB = blob.size / 1024;
+        if (sizeKB <= maxSizeKB) {
+          resolve(blob);
+        } else {
+          // If still too big, just return it (user will need to adjust their source image)
+          resolve(blob);
+        }
+      }, 'image/jpeg', 0.5);
     }
   </script>
 </body>
