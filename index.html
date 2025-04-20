@@ -1,179 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>DPI Converter Tool</title>
+  <meta charset="UTF-8">
+  <title>Batch DPI Converter</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       padding: 20px;
-      background: #f5f5f5;
+      background: #f9f9f9;
     }
-    .container {
-      max-width: 500px;
-      margin: auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    input[type="file"], input[type="number"] {
-      width: 100%;
-      margin-bottom: 10px;
-      padding: 8px;
-    }
-    canvas {
-      display: block;
-      margin: 10px auto;
-      border: 1px solid #ccc;
-    }
-    button {
-      width: 100%;
-      padding: 10px;
-      background-color: black;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-    }
-    button:hover {
-      background-color: #333;
-    }
+    h2 { margin-bottom: 10px; }
+    input[type="file"] { margin-bottom: 10px; }
+    .preview { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 20px; }
+    .preview img { border: 1px solid #ccc; padding: 4px; background: white; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>DPI Converter Tool</h2>
-    <input type="file" id="imageInput" accept="image/*" />
-    <label>Horizontal DPI:</label>
-    <input type="number" id="hDPI" value="300" />
-    <label>Vertical DPI:</label>
-    <input type="number" id="vDPI" value="300" />
-    <canvas id="canvas" width="132" height="170"></canvas>
-    <button onclick="downloadImage()">Download PNG with DPI</button>
-  </div>
 
+  <h2>Batch DPI Converter (132x170 px, 300 DPI)</h2>
+  <input type="file" multiple accept="image/*" id="fileInput">
+  <br>
+  <button onclick="downloadAll()">Download All as ZIP</button>
+  <div class="preview" id="preview"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.0/dist/jszip.min.js"></script>
   <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+    const fileInput = document.getElementById('fileInput');
+    const previewDiv = document.getElementById('preview');
+    const zip = new JSZip();
 
-    let image = new Image();
+    fileInput.addEventListener('change', async (e) => {
+      previewDiv.innerHTML = "";
+      zip.files = {}; // reset ZIP
 
-    document.getElementById("imageInput").addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+      for (const file of e.target.files) {
+        const img = await createImageBitmap(file);
+        const canvas = document.createElement('canvas');
+        canvas.width = 132;
+        canvas.height = 170;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 132, 170);
 
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        image.onload = () => {
-          // Resize to 132 x 170
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(image, 0, 0, 132, 170);
-        };
-        image.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
+        const pngBlob = await canvasToDPIBlob(canvas, 300, 300);
+        const dataURL = URL.createObjectURL(pngBlob);
+
+        // Show preview
+        const imgElem = document.createElement('img');
+        imgElem.src = dataURL;
+        imgElem.width = 132;
+        imgElem.height = 170;
+        previewDiv.appendChild(imgElem);
+
+        // Add to ZIP
+        const arrayBuffer = await pngBlob.arrayBuffer();
+        zip.file(file.name.replace(/\.[^/.]+$/, "") + "_converted.png", arrayBuffer);
+      }
     });
 
-    function downloadImage() {
-      const hDPI = parseInt(document.getElementById("hDPI").value);
-      const vDPI = parseInt(document.getElementById("vDPI").value);
+    async function canvasToDPIBlob(canvas, dpiX = 300, dpiY = 300) {
+      const png = atob(canvas.toDataURL("image/png").split(",")[1]);
+      const array = new Uint8Array(png.length);
+      for (let i = 0; i < png.length; i++) array[i] = png.charCodeAt(i);
 
-      canvas.toBlob((blob) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const arrayBuffer = reader.result;
-          const pngWithDPI = setDPI(new Uint8Array(arrayBuffer), hDPI, vDPI);
-          const blobWithDPI = new Blob([pngWithDPI], { type: "image/png" });
+      // DPI metadata: 1 meter = 39.3701 inches, so 300 dpi = 11811 pixels/meter
+      const pHYsChunk = new Uint8Array([
+        ...[0x70, 0x48, 0x59, 0x73], // "pHYs"
+        ...toBytes(11811), // X axis
+        ...toBytes(11811), // Y axis
+        1 // unit is meter
+      ]);
+      const length = toBytes(pHYsChunk.length - 4);
+      const crc = crc32(pHYsChunk);
 
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blobWithDPI);
-          a.download = "converted.png";
-          a.click();
-        };
-        reader.readAsArrayBuffer(blob);
-      }, "image/png");
+      const newChunk = new Uint8Array(4 + 4 + 9 + 4);
+      newChunk.set(length, 0);
+      newChunk.set(pHYsChunk, 4);
+      newChunk.set(crc, 4 + 4 + 9);
+
+      const iendIndex = array.findIndex((_, i) =>
+        array[i] === 0x49 && array[i+1] === 0x45 &&
+        array[i+2] === 0x4E && array[i+3] === 0x44
+      ) - 4;
+
+      const before = array.slice(0, iendIndex);
+      const after = array.slice(iendIndex);
+      const full = new Uint8Array(before.length + newChunk.length + after.length);
+      full.set(before, 0);
+      full.set(newChunk, before.length);
+      full.set(after, before.length + newChunk.length);
+
+      return new Blob([full], { type: "image/png" });
     }
 
-    // Inject DPI chunks into PNG binary
-    function setDPI(pngData, dpiX, dpiY) {
-      const dpiChunk = createpHYsChunk(dpiX, dpiY);
-      const result = [];
-
-      // PNG signature
-      result.push(...pngData.slice(0, 8));
-
-      let i = 8;
-      while (i < pngData.length) {
-        const length = (
-          (pngData[i] << 24) |
-          (pngData[i + 1] << 16) |
-          (pngData[i + 2] << 8) |
-          pngData[i + 3]
-        );
-        const type = String.fromCharCode(
-          pngData[i + 4], pngData[i + 5], pngData[i + 6], pngData[i + 7]
-        );
-        const chunk = pngData.slice(i, i + 12 + length);
-
-        result.push(...chunk);
-        i += 12 + length;
-
-        if (type === "IHDR") {
-          result.push(...dpiChunk); // Inject pHYs right after IHDR
-        }
-      }
-
-      return new Uint8Array(result);
+    function toBytes(num) {
+      return [
+        (num >> 24) & 0xff,
+        (num >> 16) & 0xff,
+        (num >> 8) & 0xff,
+        num & 0xff
+      ];
     }
 
-    function createpHYsChunk(dpiX, dpiY) {
-      const pxPerMeterX = Math.round(dpiX * 39.3701);
-      const pxPerMeterY = Math.round(dpiY * 39.3701);
-      const data = new Uint8Array(9);
-      data[0] = (pxPerMeterX >> 24) & 0xff;
-      data[1] = (pxPerMeterX >> 16) & 0xff;
-      data[2] = (pxPerMeterX >> 8) & 0xff;
-      data[3] = pxPerMeterX & 0xff;
-      data[4] = (pxPerMeterY >> 24) & 0xff;
-      data[5] = (pxPerMeterY >> 16) & 0xff;
-      data[6] = (pxPerMeterY >> 8) & 0xff;
-      data[7] = pxPerMeterY & 0xff;
-      data[8] = 1; // unit: meters
-
-      const crcTable = [];
-      for (let i = 0; i < 256; i++) {
-        let c = i;
-        for (let k = 0; k < 8; k++) {
-          c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-        }
-        crcTable[i] = c;
-      }
-
-      const type = [112, 72, 89, 115]; // "pHYs"
-      const chunk = new Uint8Array(4 + 4 + 9 + 4);
-      const dataLength = 9;
-
-      chunk[0] = (dataLength >> 24) & 0xff;
-      chunk[1] = (dataLength >> 16) & 0xff;
-      chunk[2] = (dataLength >> 8) & 0xff;
-      chunk[3] = dataLength & 0xff;
-
-      chunk.set(type, 4);
-      chunk.set(data, 8);
-
+    function crc32(bytes) {
       let crc = 0xffffffff;
-      for (let i = 4; i < 17; i++) {
-        crc = crcTable[(crc ^ chunk[i]) & 0xff] ^ (crc >>> 8);
+      for (let i = 0; i < bytes.length; i++) {
+        crc ^= bytes[i];
+        for (let j = 0; j < 8; j++) {
+          crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+        }
       }
+      return toBytes((crc ^ 0xffffffff) >>> 0);
+    }
 
-      crc ^= 0xffffffff;
-      chunk[17] = (crc >> 24) & 0xff;
-      chunk[18] = (crc >> 16) & 0xff;
-      chunk[19] = (crc >> 8) & 0xff;
-      chunk[20] = crc & 0xff;
-
-      return chunk;
+    function downloadAll() {
+      zip.generateAsync({ type: "blob" }).then(content => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(content);
+        a.download = "converted_images.zip";
+        a.click();
+      });
     }
   </script>
 </body>
